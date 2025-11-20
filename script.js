@@ -14,6 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const messageDisplay = document.getElementById('message-display');
     const finalScoreDisplay = document.getElementById('final-score');
 
+    // 新增高分榜相关 UI 元素
+    const highscoresListContainer = document.getElementById('highscores-list-container');
+    const highscoresStatus = document.getElementById('highscores-status');
+    const highscoresList = document.getElementById('highscores-list');
+    const playerNameInput = document.getElementById('player-name-input');
+    const saveScoreButton = document.getElementById('save-score-button');
+    const saveMessage = document.getElementById('save-message');
+    const saveScoreSection = document.getElementById('save-score-section');
+
+
     // 游戏配置和状态
     const GAME_DURATION_SECONDS = 60; // 游戏时长
     const PHRASES = [ // 速记题目列表
@@ -35,13 +45,29 @@ document.addEventListener('DOMContentLoaded', () => {
     let timerInterval = null;
     let gameRunning = false;
 
+    // Firebase 引用
+    let db; // Firestore 数据库实例
+    let firestoreFunctions; // 存储从 index.html 暴露的 Firestore 函数
+
     // --- 游戏流程函数 ---
 
     // 初始化游戏（绑定事件监听器）
-    function initGame() {
+    async function initGame() { // 将其标记为 async，因为会调用异步的 displayHighScores
         startGameButton.addEventListener('click', startGame);
         restartGameButton.addEventListener('click', startGame);
         userInput.addEventListener('keydown', handleUserInput);
+        saveScoreButton.addEventListener('click', savePlayerScore); // 新增保存分数按钮事件
+
+        // 如果 Firebase 已经初始化，则获取 Firestore 实例和函数
+        if (window.firebaseApp && window.firebaseDb && window.firebaseFirestore) {
+            db = window.firebaseDb;
+            firestoreFunctions = window.firebaseFirestore;
+            console.log("Firestore DB instance and functions are available in script.js");
+            await displayHighScores(); // 游戏开始时显示高分榜
+        } else {
+            console.error("Firebase App, Firestore instance, or Firestore functions not found. Make sure they are initialized correctly in index.html");
+            highscoresStatus.innerText = "无法加载高分榜：Firebase未初始化。";
+        }
     }
 
     // 开始游戏
@@ -57,6 +83,11 @@ document.addEventListener('DOMContentLoaded', () => {
         timerDisplay.innerText = `时间: ${timeLeft}s`;
         messageDisplay.innerText = ''; // 清空提示信息
         userInput.value = ''; // 清空输入框
+        saveMessage.innerText = ''; // 清空保存信息
+        playerNameInput.value = ''; // 清空玩家名字
+        saveScoreButton.disabled = false; // 启用保存按钮
+        playerNameInput.disabled = false; // 启用名字输入框
+        saveScoreSection.style.display = 'block'; // 显示保存分数区域
 
         // 切换屏幕
         startScreen.style.display = 'none';
@@ -104,24 +135,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleUserInput(event) {
         if (!gameRunning) return; // 如果游戏未运行，则不处理输入
 
-        // 实时输入反馈 (可选，可根据需要细化)
-        const typedText = userInput.value + (event.key.length === 1 ? event.key : ''); // 模拟输入后的值
+        const typedText = userInput.value; // 获取当前输入框的值
         const currentPhrase = PHRASES[currentPhraseIndex];
 
-        if (currentPhrase.startsWith(typedText)) {
+        // 实时输入反馈：
+        // 比较用户当前输入与正确短语的匹配前缀
+        const isCorrectPrefix = currentPhrase.startsWith(typedText);
+        if (isCorrectPrefix) {
             userInput.classList.remove('incorrect-input');
-            userInput.classList.add('correct-input'); // 输入正确部分为绿色
+            userInput.classList.add('correct-input');
         } else {
             userInput.classList.remove('correct-input');
-            userInput.classList.add('incorrect-input'); // 输入错误为红色
+            userInput.classList.add('incorrect-input');
         }
 
         // 当用户按下 Enter 键时，检查短语
         if (event.key === 'Enter') {
             const userTypedPhrase = userInput.value.trim();
-            const correctPhrase = PHRASES[currentPhraseIndex];
 
-            if (userTypedPhrase === correctPhrase) {
+            if (userTypedPhrase === currentPhrase) { // 使用 currentPhrase 而不是 PHRASES[currentPhraseIndex]
                 score++; // 加分
                 scoreDisplay.innerText = `得分: ${score}`;
                 messageDisplay.innerText = '✅ 正确！';
@@ -135,14 +167,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 messageDisplay.classList.add('incorrect');
                 userInput.value = ''; // 清空输入框以便重试
                 userInput.focus();
-                userInput.classList.remove('correct-input'); // 移除输入框的正确反馈
+                userInput.classList.remove('correct-input', 'incorrect-input'); // 清除输入框的颜色反馈
             }
             event.preventDefault(); // 阻止Enter键的默认行为（如表单提交）
         }
     }
 
     // 游戏结束
-    function endGame() {
+    async function endGame() { // 将其标记为 async
         gameRunning = false;
         clearInterval(timerInterval); // 停止计时器
 
@@ -153,25 +185,110 @@ document.addEventListener('DOMContentLoaded', () => {
         gameScreen.style.display = 'none';
         endScreen.style.display = 'block';
 
-        // 这里可以集成 Firebase Cloud Firestore 来保存高分！
-        // if (window.firebaseApp) {
-        //     const db = getFirestore(window.firebaseApp);
-        //     // 假设你有一个用户，你可以将分数保存到 Firestore
-        //     // await addDoc(collection(db, "highscores"), { score: score, timestamp: new Date() });
-        //     console.log("游戏结束，可以考虑将分数保存到 Firebase Firestore。");
-        // }
+        // 确保保存分数区域可见并启用
+        saveScoreSection.style.display = 'block';
+        saveScoreButton.disabled = false;
+        playerNameInput.disabled = false;
+        playerNameInput.value = ''; // 清空上次玩家的名字
+        saveMessage.innerText = ''; // 清空上次保存信息
+
+        // 立即刷新高分榜
+        await displayHighScores();
     }
 
+    // --- Firebase 高分榜功能 ---
+
+    // 保存玩家分数到 Firestore
+    async function savePlayerScore() {
+        if (!db || !firestoreFunctions) {
+            saveMessage.innerText = "Firestore 未初始化，无法保存分数。";
+            return;
+        }
+
+        const playerName = playerNameInput.value.trim();
+        if (playerName.length === 0) {
+            saveMessage.innerText = "请输入你的名字！";
+            return;
+        }
+        if (playerName.length > 20) {
+            saveMessage.innerText = "名字不能超过20个字符！";
+            return;
+        }
+
+        saveScoreButton.disabled = true; // 禁用按钮防止重复提交
+        playerNameInput.disabled = true; // 禁用名字输入框
+        saveMessage.innerText = "正在保存...";
+
+        try {
+            // 使用从 window.firebaseFirestore 暴露出来的函数
+            await firestoreFunctions.addDoc(firestoreFunctions.collection(db, "highscores"), {
+                name: playerName,
+                score: score,
+                timestamp: firestoreFunctions.serverTimestamp() // 使用服务器时间戳
+            });
+            saveMessage.innerText = "分数保存成功！";
+            // 刷新高分榜
+            await displayHighScores();
+        } catch (error) {
+            console.error("保存分数失败:", error);
+            saveMessage.innerText = `保存失败: ${error.message}`;
+            saveScoreButton.disabled = false; // 保存失败则重新启用按钮
+            playerNameInput.disabled = false; // 重新启用名字输入框
+        }
+    }
+
+    // 从 Firestore 获取并显示高分榜
+    async function displayHighScores() {
+        if (!db || !firestoreFunctions) {
+            highscoresStatus.innerText = "Firestore 未初始化，无法加载高分榜。";
+            return;
+        }
+
+        highscoresStatus.innerText = "加载中...";
+        highscoresList.innerHTML = ''; // 清空现有列表
+
+        try {
+            // 使用从 window.firebaseFirestore 暴露出来的函数
+            const q = firestoreFunctions.query(
+                firestoreFunctions.collection(db, "highscores"),
+                firestoreFunctions.orderBy("score", "desc"), // 按分数降序排列
+                firestoreFunctions.orderBy("timestamp", "asc"), // 分数相同时，按时间升序（先记录的排前面）
+                firestoreFunctions.limit(10) // 只显示前10名
+            );
+            const querySnapshot = await firestoreFunctions.getDocs(q);
+
+            if (querySnapshot.empty) {
+                highscoresStatus.innerText = "暂无高分记录。";
+            } else {
+                highscoresStatus.innerText = ""; // 清除加载状态
+                let rank = 1;
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const listItem = document.createElement('li');
+                    // serverTimestamp() 返回的是 Timestamp 对象，需要转换为 JavaScript Date 对象
+                    const date = data.timestamp ? data.timestamp.toDate().toLocaleString('zh-CN') : '未知时间';
+                    listItem.innerHTML = `<strong>#${rank}.</strong> ${data.name}: ${data.score} 分 <span style="font-size:0.8em; color: #888;">(于 ${date})</span>`;
+                    highscoresList.appendChild(listItem);
+                    rank++;
+                });
+            }
+        } catch (error) {
+            console.error("加载高分榜失败:", error);
+            highscoresStatus.innerText = `加载高分榜失败: ${error.message}`;
+        }
+    }
+
+
     // 确保 Firebase 初始化后再初始化游戏逻辑
-    if (window.firebaseApp) {
+    if (window.firebaseApp && window.firebaseDb && window.firebaseFirestore) {
         initGame();
     } else {
-        // 如果 Firebase 尚未初始化，则等待其初始化后再绑定事件
-        // 实际上，由于你的 index.html 中 Firebase 初始化在 script.js 之前，
-        // window.firebaseApp 应该已经可用。这里是更健壮的检查。
+        // 备用机制，以防 Firebase 初始化稍微延迟
         const checkFirebaseReady = setInterval(() => {
-            if (window.firebaseApp) {
+            if (window.firebaseApp && window.firebaseDb && window.firebaseFirestore) {
                 clearInterval(checkFirebaseReady);
+                db = window.firebaseDb;
+                firestoreFunctions = window.firebaseFirestore;
                 initGame();
             }
         }, 100);
