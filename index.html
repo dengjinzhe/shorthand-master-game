@@ -8,43 +8,81 @@
 </head>
 <body>
     <div id="game-container">
-        <h1>欢迎来到速记大师！</h1>
+        <h1>速记大师</h1>
         <p id="firebase-status">正在初始化 Firebase...</p>
-        <button id="start-game-button" style="display: none;">开始游戏</button>
-        <!-- 未来你的游戏内容会在这里 -->
+
+        <!-- 游戏开始界面 -->
+        <div id="start-screen">
+            <button id="start-game-button" style="display: none;">开始游戏</button>
+            <p>点击开始游戏，在规定时间内尽可能多地正确输入短语！</p>
+        </div>
+
+        <!-- 游戏进行中界面 -->
+        <div id="game-screen" style="display: none;">
+            <div class="stats">
+                <span id="timer-display">时间: 60s</span>
+                <span id="score-display">得分: 0</span>
+            </div>
+            <p id="phrase-display" class="phrase"></p>
+            <input type="text" id="user-input" placeholder="请在这里输入，按Enter键确认..." autofocus>
+            <p id="message-display" class="message"></p>
+        </div>
+
+        <!-- 游戏结束界面 -->
+        <div id="end-screen" style="display: none;">
+            <h2>游戏结束！</h2>
+            <p>你的最终得分是: <span id="final-score">0</span></p>
+            <!-- 新增：保存分数区域 -->
+            <div id="save-score-section" style="margin-top: 20px;">
+                <p>想把你的分数保存到排行榜吗？</p>
+                <input type="text" id="player-name-input" placeholder="输入你的名字" maxlength="20">
+                <button id="save-score-button">保存分数</button>
+                <p id="save-message" style="font-size: 0.9em; color: gray;"></p>
+            </div>
+            <button id="restart-game-button" style="margin-top: 10px;">再玩一次</button>
+        </div>
+
+        <!-- 高分榜显示区域 -->
+        <div id="highscores-list-container" style="margin-top: 30px;">
+            <h2>高分榜</h2>
+            <p id="highscores-status">加载中...</p>
+            <ol id="highscores-list"></ol>
+        </div>
     </div>
 
-    <!-- Firebase SDK CDN 引入 -->
-    <!-- 请注意：这里的版本号(v9)是一个例子，你应该查阅 Firebase 文档获取最新的模块化 SDK CDN 链接 -->
+    <!-- Firebase SDK CDN 引入 (更新导入的模块) -->
     <script type="module">
-        // 导入 Firebase 应用的模块
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        // 如果你需要其他 Firebase 服务，例如 Firestore，也在这里导入
-        // import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+        // 导入 Firestore 模块及其所需函数
+        import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-        // Firebase 配置对象 - 这是你项目 guesswhat-3e34d 的配置
-        // 注意：除了 projectId，其他键的值你需要从 Firebase 控制台获取
-        // 前往 Firebase Console -> 项目设置 (⚙️) -> 你的应用 -> Firebase SDK snippet (选择 "Config")
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY", // 请替换为你的实际 API Key
             authDomain: "guesswhat-3e34d.firebaseapp.com",
             projectId: "guesswhat-3e34d",
             storageBucket: "guesswhat-3e34d.appspot.com",
-            messagingSenderId: "561584092572", // 这是你的项目编号
+            messagingSenderId: "561584092572",
             appId: "YOUR_APP_ID", // 请替换为你的实际 App ID
             measurementId: "YOUR_MEASUREMENT_ID" // 如果你启用了 Google Analytics
         };
 
-        // 初始化 Firebase 应用
         const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app); // 初始化 Firestore
 
-        // 获取 Firestore 实例 (如果需要)
-        // const db = getFirestore(app);
-
-        // 将 Firebase 应用实例暴露给全局，方便 script.js 访问，或者直接在 script.js 中使用 module 导入
+        // 将必要的 Firebase App 实例、Firestore 实例和 Firestore 函数暴露到 window 对象，
+        // 这样 script.js（作为非模块脚本）就可以访问它们。
         window.firebaseApp = app;
+        window.firebaseDb = db;
+        window.firebaseFirestore = {
+            collection,
+            addDoc,
+            query,
+            orderBy,
+            limit,
+            getDocs,
+            serverTimestamp
+        };
 
-        // 确认 Firebase 初始化成功
         document.getElementById('firebase-status').innerText = 'Firebase 初始化成功！';
         document.getElementById('start-game-button').style.display = 'block';
 
