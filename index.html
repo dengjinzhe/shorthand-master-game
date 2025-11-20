@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>速记大师</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <h1>欢迎来到速记大师！</h1>
+        <p id="firebase-status">正在初始化 Firebase...</p>
+        <button id="start-game-button" style="display: none;">开始游戏</button>
+        <!-- 未来你的游戏内容会在这里 -->
+    </div>
+
+    <!-- Firebase SDK CDN 引入 -->
+    <!-- 请注意：这里的版本号(v9)是一个例子，你应该查阅 Firebase 文档获取最新的模块化 SDK CDN 链接 -->
+    <script type="module">
+        // 导入 Firebase 应用的模块
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+        // 如果你需要其他 Firebase 服务，例如 Firestore，也在这里导入
+        // import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+        // Firebase 配置对象 - 这是你项目 guesswhat-3e34d 的配置
+        // 注意：除了 projectId，其他键的值你需要从 Firebase 控制台获取
+        // 前往 Firebase Console -> 项目设置 (⚙️) -> 你的应用 -> Firebase SDK snippet (选择 "Config")
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", // 请替换为你的实际 API Key
+            authDomain: "guesswhat-3e34d.firebaseapp.com",
+            projectId: "guesswhat-3e34d",
+            storageBucket: "guesswhat-3e34d.appspot.com",
+            messagingSenderId: "561584092572", // 这是你的项目编号
+            appId: "YOUR_APP_ID", // 请替换为你的实际 App ID
+            measurementId: "YOUR_MEASUREMENT_ID" // 如果你启用了 Google Analytics
+        };
+
+        // 初始化 Firebase 应用
+        const app = initializeApp(firebaseConfig);
+
+        // 获取 Firestore 实例 (如果需要)
+        // const db = getFirestore(app);
+
+        // 将 Firebase 应用实例暴露给全局，方便 script.js 访问，或者直接在 script.js 中使用 module 导入
+        window.firebaseApp = app;
+
+        // 确认 Firebase 初始化成功
+        document.getElementById('firebase-status').innerText = 'Firebase 初始化成功！';
+        document.getElementById('start-game-button').style.display = 'block';
+
+        console.log("Firebase initialized for project:", firebaseConfig.projectId);
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>
